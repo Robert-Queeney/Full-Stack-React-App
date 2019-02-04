@@ -1,7 +1,8 @@
 import React from 'react';
 import TodoItem from './TodoItem';
 import TodoForm from './TodoForm';
-const ApiUrl = '/api/todos';
+import * as apiCalls from './api';
+
 
 
 class TodoList extends React.Component {
@@ -18,59 +19,36 @@ class TodoList extends React.Component {
         this.loadTodos()
     }
 
-    loadTodos() {
-        // can check this initially by going to the Network tab in the dev tools and clicking on the todos
-        fetch(ApiUrl)
-            .then(response => {
-                if (!response.ok) {
-                    // error handling 
-                    if (response.status >= 400 && response.status < 500) {
-                        return response.json().then(data => {
-                            let err = { errorMessage: data.message };
-                            throw err;
-                        })
-                    } else {
-                        let err = { errorMessage: 'Please try again later' };
-                        throw err;
-                    }
-                }
-                return response.json();
-            })
-            // 2nd .then b/c json returns a promise -> this.setState({todos}) sets state todos equal to the todos that come back from the fetch call    
-            .then(todos => this.setState({ todos }))
+    async loadTodos() {
+       let todos = await apiCalls.getTodos();
+       this.setState({ todos })
     }
 // method that will actually get the todo on the page
-    addTodo(value){
-       fetch(ApiUrl, {
-        //    fetch's default call is GET, so we had to specify POST below
-           method: 'post', 
-           headers: new Headers({
-               'Content-Type': 'application/json'
-           }),
-        //    It will look to add a name, so we set the name to the value we are getting from the input
-           body: JSON.stringify({name: value})
-       })
-       .then(response => {
-        if (!response.ok) {
-            // error handling 
-            if (response.status >= 400 && response.status < 500) {
-                return response.json().then(data => {
-                    let err = { errorMessage: data.message };
-                    throw err;
-                })
-            } else {
-                let err = { errorMessage: 'Please try again later' };
-                throw err;
-            }
-        }
-        return response.json();
-    })
+    async addTodo(value){
+       let newTodo = await apiCalls.createTodo(value);
+       this.setState({todos: [...this.state.todos, newTodo]})
     // this will add the newTodo into state after the fetch call 
-        .then(newTodo => {
-            // "...this.state.todos" takes all of the existing todos before adding newTodo
-            this.setState({todos: [...this.state.todos, newTodo]})
-        })
+    // "...this.state.todos" takes all of the existing todos before adding newTodo
     }
+   
+
+    async deleteTodo(id){
+        await apiCalls.removeTodo(id)
+        // this will get rid of the one with the id we are trying to delete
+        const todos = this.state.todos.filter(todo => todo._id !== id)
+        // then set state to the new todos with the one todo deleted
+        this.setState({todos: todos})
+    }
+
+    async toggleTodo(todo){
+        let updatedTodo = await apiCalls.updateTodo(todo)
+            // maps through todos and 
+            const todos = this.state.todos.map(t =>
+            // if that todo's completed is equal to the updatedTodo's completed, we will change that todo's complted to the opposite
+            (t._id === updatedTodo._id) ? {...t, completed: !t.completed} : t
+            )
+            this.setState({todos: todos})
+        }
 
     render() {
         // using 't' for each element in the todos array
@@ -79,6 +57,10 @@ class TodoList extends React.Component {
                 // can use the _id data in todos obj for the key
                 key={t._id}
                 {...t}
+                // we are binding this here becasue we need data specific to this TodoItem specifically (t._id)
+                onDelete={this.deleteTodo.bind(this, t._id)}
+                // need the entire 't' or todo becasue we need more info than just the id to change the completed state
+                onToggle={this.toggleTodo.bind(this, t)}
             />
         ));
         return (
